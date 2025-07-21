@@ -56,6 +56,7 @@ class TrackBearObject:
 
 
 MeasureType = Literal['word', 'time', 'page', 'chapter', 'scene', 'line']
+State = Literal['active', 'deleted']
 
 
 @dataclass
@@ -85,8 +86,7 @@ Color = Literal[
 @dataclass
 class Tag(TrackBearObject):
     name: str
-    state: Literal['active', 'deleted'] | None = field(
-        repr=False, default=None)
+    state: State | None = field(repr=False, default=None)
     color: Color | None = None
 
     def delete(self):
@@ -153,8 +153,7 @@ class Project(TrackBearObject):
     starred: bool = False
     displayOnProfile: bool = False
 
-    state: Literal['active', 'deleted'] | None = field(
-        repr=False, default=None)
+    state: State | None = field(repr=False, default=None)
     phase: Literal[
         'planning', 'outlining', 'drafting',
         'revising', 'on hold', 'finished', 'abandoned'
@@ -166,7 +165,7 @@ class Project(TrackBearObject):
 
     totals: ClassVar[Count]
     tallies: ClassVar[list[Tally]]
-    lastUpdated: ClassVar[NotImplementedType]
+    lastUpdated: ClassVar[NotImplementedType] = field(init=False, repr=False)
 
     def delete(self):
         self._trackbear.delete_project(self.id)
