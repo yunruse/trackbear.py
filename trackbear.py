@@ -1,14 +1,19 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
+from datetime import date as Date
+
 import requests
 
-from trackbear_types import ProjectWithTallies, ProjectWithoutTallies, Tag, Tally, TallyWithWork
+from trackbear_types import MeasureType, Project, ProjectWithTallies, ProjectWithoutTallies, Tag, TallyWithWork
 
 Method = Literal['GET', 'POST']
 
 
 class InvalidToken(Exception):
+    pass
+
+class APIError(Exception):
     pass
 
 
@@ -30,6 +35,7 @@ class TrackBearAPI:
         self,
         method: Method,
         url: str,
+        json: dict = None,
     ) -> dict:
         response = requests.request(
             method=method,
@@ -37,10 +43,13 @@ class TrackBearAPI:
             headers={
                 'User-Agent': 'github.com/yunruse/trackbear.py by mia@yunru.se',
                 'Authorization': f'Bearer {self.api_key}',
-            }
+            },
+            json=json,
         )
         if response.status_code == 401:
             raise InvalidToken(response.json()['error']['message'])
+        if response.status_code == 400:
+            raise APIError(response.json()['error']['message'])
         response.raise_for_status()
 
         json = response.json()
@@ -62,6 +71,35 @@ class TrackBearAPI:
     def tally(self, id: int):
         "Get a specific tally."
         return TallyWithWork(**self._request('GET', f'/tally/{id}'))
+
+    def add_tally(
+        self,
+        project: Project | str | int,
+        count: int,
+        measure: MeasureType = 'word',
+        date: Date = None,
+        set_total: bool = False,
+        note: str = "",
+
+        tags: list[str] = None
+    ):
+        if isinstance(project, Project):
+            project = project.id
+        
+        date = date or Date.today()
+        if isinstance(date, Date):
+            date = date.isoformat()
+
+        result = self._request('POST', '/tally', {
+            'date': date,
+            'measure': measure,
+            'count': count,
+            'note': note,
+            'workId': int(project),
+            'setTotal': set_total,
+            'tags': tags or [],
+        })
+        return TallyWithWork(**result)
 
     def tags(self):
         "Get all of the user's tags."
