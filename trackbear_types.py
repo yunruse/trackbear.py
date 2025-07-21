@@ -2,9 +2,14 @@
 Types returned by the Trackbear API.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime as Datetime, date as Date
-from typing import Literal
+from types import NotImplementedType
+from typing import TYPE_CHECKING, ClassVar, Literal
+
+
+if TYPE_CHECKING:
+    from .trackbear import TrackBearAPI
 
 
 def convert[T](item: T | dict, type: type[T]) -> T:
@@ -33,6 +38,22 @@ class TrackBearObject:
             if isinstance(v, str):
                 setattr(self, k, Datetime.fromisoformat(v))
 
+    __tb: "TrackBearAPI" = field(init=False, repr=False, default=None)
+
+    def _tb(self, tb: "TrackBearAPI"):
+        self.__tb = tb
+        return self
+
+    @property
+    def _trackbear(self):
+        if self.__tb is None:
+            raise ValueError(
+                f"Somehow this {type(self).__name__}"
+                " was not instantiated from a TrackBearAPI,"
+                " so cannot use this method."
+            )
+        return self.__tb
+
 
 MeasureType = Literal['word', 'time', 'page', 'chapter', 'scene', 'line']
 
@@ -46,15 +67,26 @@ class Count:
     scene: int = 0
     line: int = 0
 
+    def __add__(self, other: "Count | Tally"):
+        total = asdict(self)
+        if isinstance(other, Tally):
+            total[other.measure] += other.count
+        else:
+            for k, v in asdict(other).items():
+                total[k] += v
+        return Count(**total)
+
+
+Color = Literal[
+    "default", "red", "orange", "yellow", "green",
+    "blue", "purple", "brown", "white", "black", "gray"]
+
 
 @dataclass
 class Tag(TrackBearObject):
     name: str
     state: Literal['active', 'deleted'] | None = None
-    color: str | None = None
-
-    def __post_init__(self):
-        super().__post_init__()
+    color: Color | None = None
 
 
 @dataclass
@@ -64,7 +96,7 @@ class Tally(TrackBearObject):
     measure: MeasureType
     count: int
     note: str
-    workId: str
+    workId: int
     tags: list[Tag]
 
     def __post_init__(self):
@@ -73,15 +105,34 @@ class Tally(TrackBearObject):
             self.date = Date.fromisoformat(self.date)
         self.tags = convertList(self.tags, Tag)
 
+    def _tb(self, tb):
+        for t in self.tags:
+            t._tb(tb)
+        return super()._tb(tb)
+
+
+@dataclass
+class TallyWithoutWork(Tally):
+    __qualname__ = 'Tally'
+
+    @property
+    def work(self):
+        return self._trackbear.tally(self.workId)
+
 
 @dataclass
 class TallyWithWork(Tally):
-    workId: str = field(repr=False)
-    work: "Project"
+    __qualname__ = 'Tally'
+
+    work: "Project" = field()
 
     def __post_init__(self):
         super().__post_init__()
         self.work = convert(self.work, Project)
+
+    def _tb(self, tb):
+        self.work._tb(tb)
+        return super()._tb(tb)
 
 
 @dataclass
@@ -105,9 +156,15 @@ class Project(TrackBearObject):
         super().__post_init__()
         self.startingBalance = convert(self.startingBalance, Count)
 
+    totals: ClassVar[Count]
+    tallies: ClassVar[list[Tally]]
+    lastUpdated: ClassVar[NotImplementedType]
+
 
 @dataclass
 class ProjectWithoutTallies(Project):
+    __qualname__ = 'Project'
+
     lastUpdated: str | None = field(default=None, repr=False)
     totals: Count = field(default_factory=Count)
 
@@ -115,11 +172,26 @@ class ProjectWithoutTallies(Project):
         super().__post_init__()
         self.totals = convert(self.totals, Count)
 
+    @property
+    def tallies(self):
+        return self._trackbear.project(self.id).tallies
+
 
 @dataclass
 class ProjectWithTallies(Project):
+    __qualname__ = 'Project'
+
     tallies: list[Tally] = field(default_factory=list)
+
+    @property
+    def totals(self):
+        return sum(self.tallies, start=self.startingBalance)
 
     def __post_init__(self):
         super().__post_init__()
         self.tallies = convertList(self.tallies, Tally)
+
+    def _tb(self, tb):
+        for t in self.tallies:
+            t._tb(tb)
+        return super()._tb(tb)
