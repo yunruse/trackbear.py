@@ -26,7 +26,7 @@ def convertList[T](items: list[T] | list[dict], type: type[T]) -> list[T]:
 
 @dataclass
 class TrackBearObject:
-    id: str
+    id: str = field(repr=False)
     uuid: str = field(repr=False)
     createdAt: Datetime = field(repr=False)
     updatedAt: Datetime = field(repr=False)
@@ -85,8 +85,12 @@ Color = Literal[
 @dataclass
 class Tag(TrackBearObject):
     name: str
-    state: Literal['active', 'deleted'] | None = None
+    state: Literal['active', 'deleted'] | None = field(
+        repr=False, default=None)
     color: Color | None = None
+
+    def delete(self):
+        self._trackbear.delete_tag(self.id)
 
 
 @dataclass
@@ -109,6 +113,9 @@ class Tally(TrackBearObject):
         for t in self.tags:
             t._tb(tb)
         return super()._tb(tb)
+
+    def delete(self):
+        self._trackbear.delete_tally(self.id)
 
 
 @dataclass
@@ -146,7 +153,8 @@ class Project(TrackBearObject):
     starred: bool = False
     displayOnProfile: bool = False
 
-    state: Literal['active', 'deleted'] | None = None
+    state: Literal['active', 'deleted'] | None = field(
+        repr=False, default=None)
     phase: Literal[
         'planning', 'outlining', 'drafting',
         'revising', 'on hold', 'finished', 'abandoned'
@@ -159,6 +167,9 @@ class Project(TrackBearObject):
     totals: ClassVar[Count]
     tallies: ClassVar[list[Tally]]
     lastUpdated: ClassVar[NotImplementedType]
+
+    def delete(self):
+        self._trackbear.delete_project(self.id)
 
 
 @dataclass

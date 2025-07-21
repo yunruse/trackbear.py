@@ -32,7 +32,7 @@ if __name__ == '__main__':
         print("No writing history found for yesterday!")
         exit(0)
 
-    tally = tb.add_tally(
+    tally = tb.create_tally(
         project=CONFIG['project_id'],
         count=wh.draft_words_total,
         date=yesterday,
