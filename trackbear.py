@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, field
-from typing import Literal
+from typing import Literal, cast
 
 from datetime import date as Date
 
@@ -36,7 +36,7 @@ class TrackBearAPI:
         self,
         method: Method,
         url: str,
-        json: dict = None,
+        json: dict | None = None,
     ) -> dict:
         response = requests.request(
             method=method,
@@ -53,8 +53,8 @@ class TrackBearAPI:
             raise APIError(response.json()['error']['message'])
         response.raise_for_status()
 
-        json = response.json()
-        assert json['success']
+        json = cast(dict[str, dict], response.json())
+        assert cast(bool, json['success'])
         return json['data']
 
     # 88888888ba                            88
@@ -83,7 +83,7 @@ class TrackBearAPI:
         phase: str = "planning",
         starred: bool = False,
         display_on_profile: bool = False,
-        starting_balance: Count = None
+        starting_balance: Count | None = None
     ):
 
         result = self._request('POST', '/project', {
@@ -122,21 +122,19 @@ class TrackBearAPI:
         project: Project | str | int,
         count: int,
         measure: MeasureType = 'word',
-        date: Date = None,
+        date: Date | None = None,
         set_total: bool = False,
         note: str = "",
 
-        tags: list[str] = None
+        tags: list[str] | None = None
     ) -> Tally:
         if isinstance(project, Project):
             project = project.id
 
-        date = date or Date.today()
-        if isinstance(date, Date):
-            date = date.isoformat()
+        date_str = (date or Date.today()).isoformat()
 
         result = self._request('POST', '/tally', {
-            'date': date,
+            'date': date_str,
             'measure': measure,
             'count': count,
             'note': note,

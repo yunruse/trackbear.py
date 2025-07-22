@@ -5,7 +5,7 @@ Types returned by the Trackbear API.
 from dataclasses import asdict, dataclass, field
 from datetime import datetime as Datetime, date as Date
 from types import NotImplementedType
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 
 if TYPE_CHECKING:
@@ -18,15 +18,17 @@ def convert[T](item: T | dict, type: type[T]) -> T:
     return item
 
 
-def convertList[T](items: list[T] | list[dict], type: type[T]) -> list[T]:
-    if items and isinstance(items[0], dict):
+def convertList[T](items: list[T] | list[dict[str, Any]], type: type[T]) -> list[T]:
+    if items and all(isinstance(t, dict) for t in items):
+        items = cast(list[dict[str, Any]], items)
         return [type(**d) for d in items]
-    return items
+    else:
+        return cast(list[T], items)
 
 
 @dataclass
 class TrackBearObject:
-    id: str = field(repr=False)
+    id: int = field(repr=False)
     uuid: str = field(repr=False)
     createdAt: Datetime = field(repr=False)
     updatedAt: Datetime = field(repr=False)
@@ -38,7 +40,7 @@ class TrackBearObject:
             if isinstance(v, str):
                 setattr(self, k, Datetime.fromisoformat(v))
 
-    __tb: "TrackBearAPI" = field(init=False, repr=False, default=None)
+    __tb: "TrackBearAPI | None" = field(init=False, repr=False, default=None)
 
     def _tb(self, tb: "TrackBearAPI"):
         self.__tb = tb
@@ -163,9 +165,9 @@ class Project(TrackBearObject):
         super().__post_init__()
         self.startingBalance = convert(self.startingBalance, Count)
 
-    totals: ClassVar[Count]
-    tallies: ClassVar[list[Tally]]
-    lastUpdated: ClassVar[NotImplementedType] = field(init=False, repr=False)
+    totals: Count = field(init=False)
+    tallies: list[Tally] = field(init=False)
+    lastUpdated: NotImplementedType = field(init=False, repr=False)
 
     def delete(self):
         self._trackbear.delete_project(self.id)
@@ -175,7 +177,7 @@ class Project(TrackBearObject):
 class ProjectWithoutTallies(Project):
     __qualname__ = 'Project'
 
-    lastUpdated: str | None = field(default=None, repr=False)
+    lastUpdated: NotImplementedType | None = field(default=None, repr=False)
     totals: Count = field(default_factory=Count)
 
     def __post_init__(self):
@@ -183,7 +185,7 @@ class ProjectWithoutTallies(Project):
         self.totals = convert(self.totals, Count)
 
     @property
-    def tallies(self):
+    def tallies(self) -> list[Tally]:  # type: ignore
         return self._trackbear.project(self.id).tallies
 
 
@@ -194,8 +196,8 @@ class ProjectWithTallies(Project):
     tallies: list[Tally] = field(default_factory=list)
 
     @property
-    def totals(self):
-        return sum(self.tallies, start=self.startingBalance)
+    def totals(self):  # type: ignore
+        return sum(self.tallies, start=self.startingBalance)  # type: ignore
 
     def __post_init__(self):
         super().__post_init__()
